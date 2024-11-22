@@ -41,6 +41,23 @@ namespace ProtectedApiProject.Services
             // Parsear los eventos a objetos
             var purchases = _events.ToList();
 
+            // Producto más caro (Global)
+            var mostExpensiveProduct = purchases
+                .SelectMany(p => p.Details)
+                .OrderByDescending(prod => prod.Price)
+                .FirstOrDefault();
+
+            // Provincia con más compras (Global)
+            var topProvince = purchases
+                .GroupBy(p => p.User.Provincia) // Agrupar por provincia del usuario
+                .Select(g => new
+                {
+                    Provincia = g.Key,
+                    TotalPurchases = g.Count()
+                })
+                .OrderByDescending(g => g.TotalPurchases)
+                .FirstOrDefault();
+
             // Calcular estadísticas agrupadas por mes
             var groupedByMonth = purchases
                 .GroupBy(p => new { p.Time.Year, p.Time.Month })
@@ -105,7 +122,26 @@ namespace ProtectedApiProject.Services
             return new
             {
                 PurchasesByMonth = groupedByMonth,
-                SalesStatisticsByYear = groupedByYear
+                SalesStatisticsByYear = groupedByYear,
+                MostExpensiveProduct = mostExpensiveProduct != null
+            ? new
+            {
+                ProductId = mostExpensiveProduct.ID,
+                ProductName = mostExpensiveProduct.Name,
+                ProductPrice = mostExpensiveProduct.Price,
+                ProductCount = mostExpensiveProduct.Count, // Número de productos en la compra
+                ProductCategory = mostExpensiveProduct.Category, // Categoría del producto
+                CommerceId = mostExpensiveProduct.CommerceID
+            }
+            : null,
+                TopProvince = topProvince != null
+            ? new
+            {
+                Province = topProvince.Provincia,
+                TotalPurchases = topProvince.TotalPurchases
+            }
+            : null
+
             };
         }
 
