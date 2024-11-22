@@ -47,6 +47,64 @@ namespace ProtectedApiProject.Services
                 .OrderByDescending(prod => prod.Price)
                 .FirstOrDefault();
 
+            // Los 5 productos más caros
+            var topFiveExpensiveProducts = purchases
+                .SelectMany(p => p.Details)
+                .GroupBy(prod => new { prod.ID, prod.Name, prod.Category }) // Agrupar por ID, Nombre y Categoría
+                .Select(prodGroup => new
+                {
+                    ProductId = prodGroup.Key.ID,
+                    ProductName = prodGroup.Key.Name,
+                    ProductCategory = prodGroup.Key.Category,
+                    TotalPrice = prodGroup.Sum(prod => prod.Price), // Total acumulado por producto
+                })
+                .OrderByDescending(prod => prod.TotalPrice) // Ordenar por precio total
+                .Take(5) // Tomar los 5 primeros
+                .ToList();
+
+            // Los 5 productos menos vendidos
+            var leastSoldProducts = purchases
+                .SelectMany(p => p.Details)
+                .GroupBy(prod => new { prod.ID, prod.Name, prod.Category }) // Agrupar por ID, Nombre y Categoría
+                .Select(prodGroup => new
+                {
+                    ProductId = prodGroup.Key.ID,
+                    ProductName = prodGroup.Key.Name,
+                    ProductCategory = prodGroup.Key.Category,
+                    TotalSold = prodGroup.Count() // Total de veces vendido
+                })
+                .OrderBy(prod => prod.TotalSold) // Ordenar por menor cantidad vendida
+                .Take(5) // Tomar los 5 menos vendidos
+                .ToList();
+
+            // Los 5 productos más baratos
+            var cheapestProducts = purchases
+                .SelectMany(p => p.Details)
+                .GroupBy(prod => new { prod.ID, prod.Name, prod.Category }) // Agrupar por ID, Nombre y Categoría
+                .Select(prodGroup => new
+                {
+                    ProductId = prodGroup.Key.ID,
+                    ProductName = prodGroup.Key.Name,
+                    ProductCategory = prodGroup.Key.Category,
+                    Price = prodGroup.Min(prod => prod.Price) // Precio más bajo del grupo
+                })
+                .OrderBy(prod => prod.Price) // Ordenar por menor precio
+                .Take(5) // Tomar los 5 más baratos
+                .ToList();
+
+            // Los 5 clientes que más compran
+            var topFiveCustomers = purchases
+                .GroupBy(p => new { p.User.ID, p.User.Name }) // Agrupar por ID y Nombre del cliente
+                .Select(customerGroup => new
+                {
+                    CustomerId = customerGroup.Key.ID,
+                    CustomerName = customerGroup.Key.Name,
+                    TotalSpent = customerGroup.Sum(p => p.Details.Sum(prod => prod.Price)), // Sumar el total de compras
+                })
+                .OrderByDescending(customer => customer.TotalSpent) // Ordenar por gasto total
+                .Take(5) // Tomar los 5 clientes con mayor gasto
+                .ToList();
+
             // Provincia con más compras (Global)
             var topProvince = purchases
                 .GroupBy(p => p.User.Provincia) // Agrupar por provincia del usuario
@@ -134,6 +192,10 @@ namespace ProtectedApiProject.Services
                 CommerceId = mostExpensiveProduct.CommerceID
             }
             : null,
+                TopFiveExpensiveProducts = topFiveExpensiveProducts,
+                TopFiveCustomers = topFiveCustomers, // Agregar los 5 clientes que más compran
+                LeastSoldProducts = leastSoldProducts, // Agregar los productos menos vendidos
+                CheapestProducts = cheapestProducts,
                 TopProvince = topProvince != null
             ? new
             {
