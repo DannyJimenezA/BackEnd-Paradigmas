@@ -32,7 +32,7 @@
 //{
 //    options.AddPolicy("AllowLocalhost", builder =>
 //    {
-//        builder.WithOrigins("http://localhost:5173") // URL del frontend local
+//        builder.WithOrigins("http: //localhost  :5173") // URL del frontend local
 //               .AllowAnyHeader()
 //               .AllowAnyMethod()
 //               .AllowCredentials(); // Necesario para SignalR
@@ -78,7 +78,7 @@
 //builder.Services.AddAuthentication("Bearer")
 //    .AddJwtBearer("Bearer", options =>
 //    {
-//        options.Authority = "https://26.213.88.174:7113"; // URL de tu IdentityServer
+//        options.Authority = "https: //26.213.88.174:7113"; // URL de tu IdentityServer
 //        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
 //        {
 //            ValidateAudience = false
@@ -165,15 +165,17 @@ using EventStore.Client;
 using Microsoft.AspNetCore.SignalR;
 using Newtonsoft.Json;
 using ProtectedApiProject.Hubs;
+using ProtectedApiProject.Models;
 using ProtectedApiProject.Services;
 using System.Text;
+using static IdentityModel.OidcConstants;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Configurar EventStoreClient
 builder.Services.AddSingleton(sp =>
 {
-    var settings = EventStoreClientSettings.Create("esdb://admin:changeit@26.95.4.225:2113?tls=false");
+    var settings = EventStoreClientSettings.Create("esdb://admin:changeit@26.141.81.13:2113?tls=true&tlsVerifyCert=false");
     settings.CreateHttpMessageHandler = () =>
         new SocketsHttpHandler
         {
@@ -297,24 +299,35 @@ app.Run();
 async Task ReadAllOldEventsAsync(EventStoreClient client, IEventDataService eventDataService)
 {
     Console.WriteLine("Cargando eventos antiguos...");
-    var events = client.ReadStreamAsync(Direction.Forwards, "test", StreamPosition.Start);
+    var events = client.ReadStreamAsync(Direction.Forwards, "Compra", StreamPosition.Start);
 
     await foreach (var resolvedEvent in events)
     {
+        //var eventData = EventDto//Encoding.UTF8.GetString(resolvedEvent.Event.Data.Span);
+        //eventDataService.AddEvent(eventData); // Guardar evento y transmitir estadísticas
         var eventData = Encoding.UTF8.GetString(resolvedEvent.Event.Data.Span);
-        eventDataService.AddEvent(eventData); // Guardar evento y transmitir estadísticas
+        //eventDataService.AddEvent(eventData); // Guardar evento y transmitir estadísticas
+        var deserializedEvent = JsonConvert.DeserializeObject<EventDto>(eventData);
+        if (deserializedEvent != null)
+        {
+            eventDataService.AddEvent(deserializedEvent);
+        }
         Console.WriteLine($"Evento antiguo: {eventData}");
     }
 }
-
 async Task SubscribeToNewEventsAsync(EventStoreClient client, IEventDataService eventDataService)
 {
     Console.WriteLine("Suscribiéndose a eventos nuevos...");
-    await client.SubscribeToStreamAsync("test", FromStream.End,
+    await client.SubscribeToStreamAsync("Compra", FromStream.End,
         async (subscription, resolvedEvent, cancellationToken) =>
         {
             var eventData = Encoding.UTF8.GetString(resolvedEvent.Event.Data.Span);
-            eventDataService.AddEvent(eventData); // Guardar evento y transmitir estadísticas
+            //eventDataService.AddEvent(eventData); // Guardar evento y transmitir estadísticas
+            var deserializedEvent = JsonConvert.DeserializeObject<EventDto>(eventData);
+            if (deserializedEvent != null)
+            {
+                eventDataService.AddEvent(deserializedEvent);
+            }
             Console.WriteLine($"Nuevo evento: {eventData}");
         },
         subscriptionDropped: (subscription, reason, exception) =>

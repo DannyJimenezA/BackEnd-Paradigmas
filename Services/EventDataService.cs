@@ -2,34 +2,22 @@
 using Newtonsoft.Json;
 using Microsoft.AspNetCore.SignalR;
 using ProtectedApiProject.Hubs;
+using ProtectedApiProject.Models;
 
 namespace ProtectedApiProject.Services
 {
-    public class PurchaseEvent
-    {
-        public string CustomerId { get; set; } // ID del cliente
-        public DateTime Date { get; set; } // Fecha de la compra
-        public List<Product> Products { get; set; } // Lista de productos
-    }
-
-    public class Product
-    {
-        public string ProductId { get; set; } // ID del producto
-        public string Name { get; set; } // Nombre del producto
-        public decimal Price { get; set; } // Precio del producto
-    }
-
+   
     public interface IEventDataService
     {
-        void AddEvent(string eventData);
-        IEnumerable<string> GetAllEvents();
+        void AddEvent(EventDto eventData);
+        IEnumerable<EventDto> GetAllEvents();
         object GetPurchaseStatistics(); // Estadísticas iniciales
         Task BroadcastStatistics(); // Método para enviar estadísticas en tiempo real
     }
 
     public class EventDataService : IEventDataService
     {
-        private readonly ConcurrentBag<string> _events = new();
+        private readonly ConcurrentBag<EventDto> _events = new();
         private readonly IHubContext<StatisticsHub> _hubContext;
 
         public EventDataService(IHubContext<StatisticsHub> hubContext)
@@ -37,13 +25,13 @@ namespace ProtectedApiProject.Services
             _hubContext = hubContext;
         }
 
-        public void AddEvent(string eventData)
+        public void AddEvent(EventDto eventData)
         {
             _events.Add(eventData);
             _ = BroadcastStatistics(); // Transmitir actualizaciones en tiempo real
         }
 
-        public IEnumerable<string> GetAllEvents()
+        public IEnumerable<EventDto> GetAllEvents()
         {
             return _events;
         }
@@ -51,26 +39,23 @@ namespace ProtectedApiProject.Services
         public object GetPurchaseStatistics()
         {
             // Parsear los eventos a objetos
-            var purchases = _events
-                .Select(e => JsonConvert.DeserializeObject<PurchaseEvent>(e))
-                .Where(e => e != null)
-                .ToList();
+            var purchases = _events.ToList();
 
             // Calcular estadísticas agrupadas por mes
             var groupedByMonth = purchases
-                .GroupBy(p => new { p.Date.Year, p.Date.Month })
+                .GroupBy(p => new { p.Time.Year, p.Time.Month })
                 .Select(g => new
                 {
                     Month = $"{g.Key.Year}-{g.Key.Month:D2}",
-                    TotalAmount = g.Sum(p => p.Products.Sum(prod => prod.Price)), // Suma de precios de todos los productos
+                    TotalAmount = g.Sum(p => p.Details.Sum(prod => prod.Price)), // Suma de precios de todos los productos
                     TotalPurchases = g.Count(), // Cantidad de compras en el mes
-                    TotalProducts = g.Sum(p => p.Products.Count), // Conteo total de productos comprados
-                    TotalCustomers = g.Select(p => p.CustomerId).Distinct().Count(), // Clientes únicos por mes
-                    Products = g.SelectMany(p => p.Products) // Lista completa de productos
-                                .GroupBy(prod => new { prod.ProductId, prod.Name }) // Agrupar productos por ID y Nombre
+                    TotalProducts = g.Sum(p => p.Details.Count), // Conteo total de productos comprados
+                    TotalCustomers = g.Select(p => p.User.ID).Distinct().Count(), // Clientes únicos por mes
+                    Products = g.SelectMany(p => p.Details) // Lista completa de productos
+                                .GroupBy(prod => new { prod.ID, prod.Name }) // Agrupar productos por ID y Nombre
                                 .Select(prodGroup => new
                                 {
-                                    ProductId = prodGroup.Key.ProductId,
+                                    ProductId = prodGroup.Key.ID,
                                     Name = prodGroup.Key.Name,
                                     Price = prodGroup.Sum(prod => prod.Price) // Total de precios por producto
                                 })
@@ -80,23 +65,23 @@ namespace ProtectedApiProject.Services
 
             // Calcular estadísticas agrupadas por año
             var groupedByYear = purchases
-                .GroupBy(p => p.Date.Year)
+                .GroupBy(p => p.Time.Year)
                 .Select(g => new
                 {
                     Year = g.Key,
-                    MaxSalesMonth = g.GroupBy(p => p.Date.Month)
+                    MaxSalesMonth = g.GroupBy(p => p.Time.Month)
                                      .Select(monthGroup => new
                                      {
                                          Month = monthGroup.Key,
-                                         TotalSales = monthGroup.Sum(p => p.Products.Sum(prod => prod.Price))
+                                         TotalSales = monthGroup.Sum(p => p.Details.Sum(prod => prod.Price))
                                      })
                                      .OrderByDescending(m => m.TotalSales)
                                      .FirstOrDefault(), // Mes con más ventas
-                    MinSalesMonth = g.GroupBy(p => p.Date.Month)
+                    MinSalesMonth = g.GroupBy(p => p.Time.Month)
                                      .Select(monthGroup => new
                                      {
                                          Month = monthGroup.Key,
-                                         TotalSales = monthGroup.Sum(p => p.Products.Sum(prod => prod.Price))
+                                         TotalSales = monthGroup.Sum(p => p.Details.Sum(prod => prod.Price))
                                      })
                                      .OrderBy(m => m.TotalSales)
                                      .FirstOrDefault() // Mes con menos ventas
